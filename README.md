@@ -2,6 +2,8 @@
 
 # FIFA 21 Player Market Value Analysis
 
+🔗 **[View Live Report](https://pinterestringo.github.io/fifa21-player-value-analysis)**
+
 **Course:** Biostatistics | CUNY Baruch College  
 **Language/Tools:** R, Quarto, ggplot2, tidyverse
 
