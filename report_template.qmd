@@ -1,0 +1,322 @@
+---
+title: "title"
+author:
+   - name: Hana Dauti
+     email: hana.dauti@baruchmail.cuny.edu
+     affiliations:
+      - department: Department of Mathematics
+      - name: Baruch College
+      - address: 17 Lexington Avenue
+      - city: New York
+      - region: New York
+      - postal_code: 10010
+      - country: United States
+format:
+  html:
+    toc: true
+    toc-float: true
+    toc-depth: 2
+    number-sections: true
+    code-folding: hide
+    theme: readable
+    embed-resources: true
+  docx:
+    toc: true
+    number-sections: true
+    highlight-style: github
+  pdf:
+    number-sections: true
+    colorlinks: true
+    keeptex: true
+    include-in-header: 
+      text: |
+        \usepackage{booktabs}
+        \usepackage{siunitx}
+        \newcolumntype{d}{S[
+            input-open-uncertainty=,
+            input-close-uncertainty=,
+            parse-numbers = false,
+            table-align-text-pre=false,
+            table-align-text-post=false
+date: 'last-modified'
+date-format: '[This version:] MMMM D, YYYY [<br>(First version: February  16, 2023)]'
+abstract: 'text'
+bibliography: references.bib
+csl: marine-ecology-progress-series.csl
+tbl-cap-location: top
+number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: false
+editor:
+  mode: source
+  markdown: 
+    wrap: 72
+editor_options: 
+  chunk_output_type: console
+---
+
+THIS TEMPLATE IS DESIGNED TO HELP GUIDE YOUR PROJECT DEVELOPMENT. YOU
+CAN CHANGE OR ADD ANY SECTIONS, BUT I NEED A BRIEF BACKGROUND (WHAT IS
+YOUR QUESTION, WHY, WHAT DOES THE DATA LOOK LIKE?). THEN YOU NEED TO
+IMPORT THE DATA, CHECK IT, PERFORM EDA, RUN AND INTERPRET TESTS, DEVELOP
+APPROPRIATE PLOTS, AND THEN BRIEFLY SUMMARIZE YOUR FINDINGS.
+
+This template also introduces the idea of using quarto to write a
+reproducible paper. You may need to play with the execute options in R.
+Most of this follows a paper [@bauer2023]. Notice this is a citation
+input from my zotero (which then saved it in this projects
+references.bib file); more information on citations \@
+<https://quarto.org/docs/authoring/citations.html>. The paper is now
+shown in my references, with a link to the document.
+
+## Background and metadata
+
+Before diving into the goal of this project, it’s important to provide
+some context on the sport and why analyzing it is meaningful. Sports
+betting is a global industry worth over \$500 billion, and football
+(soccer) is at the heart of it — played by over 250 million people
+across more than 200 countries, making it the most popular sport in the
+world. Among all leagues, the English Premier League (EPL) stands out as
+the most-watched and competitive domestic league, drawing fans,
+analysts, and bettors from around the globe. This global appeal and the
+high stakes involved make the EPL a valuable subject for data analysis
+and performance research.
+
+Understanding how player traits relate to value is important in both
+real-life scouting and sports analytics. Teams and analysts often rely
+on data like this to make decisions about transfers, contracts, and
+player development. Although this model simplifies the real world
+**heavily** by excluding factors like age, potential, or fame, it still
+reveals useful insights—specifically that pace and passing are strong,
+statistically significant predictors of value.
+
+The primary goal of this project is to determine how a soccer player's
+on-field attributes—such as pace, shooting, and passing affect their
+market value. Using statistical modeling, specifically multiple linear
+regression, I will attempt to identify which performance-related traits
+are most strongly associated with a player's estimated monetary worth in
+the transfer market. The data was obtained from the FIFA 21 Complete
+Player Dataset on Kaggle, an open-source data platform. This dataset
+compiles detailed information on over 18,000 professional players,
+including their skill ratings, demographic information, and financial
+estimates like market value and wage.
+
+## Read in (Import) your data
+
+.
+
+```{r}
+player_data <- read.csv("fifa21 raw data v2.csv", stringsAsFactors = TRUE)
+```
+
+## Check your data
+
+```{r}
+head(player_data)
+```
+
+```{r}
+str(player_data)
+```
+
+```{r}
+summary(player_data)
+```
+
+## Exploratory data analysis
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+library(tidyverse)
+
+
+# Clean relevant columns
+clean_num <- function(x) as.numeric(sub(" .*", "", x))
+player_data$PAC <- clean_num(player_data$PAC)
+player_data$SHO <- clean_num(player_data$SHO)
+player_data$PAS <- clean_num(player_data$PAS)
+
+# 4. Convert Value to numeric (in euros)
+convert_value <- function(val) {
+  val <- gsub("€", "", val)
+  val <- gsub("K", "e3", val)
+  val <- gsub("M", "e6", val)
+  val <- gsub("B", "e9", val)
+  as.numeric(eval(parse(text = val)))
+}
+
+player_data$ValueEUR <- sapply(player_data$Value, convert_value)
+
+
+playerdata_clean <- player_data %>%
+  filter(!is.na(PAC), !is.na(SHO), !is.na(PAS), !is.na(ValueEUR))
+```
+
+```{r}
+library(tidyr)
+playerdata_clean<- separate_wider_delim(player_data, Positions,  ",", names=c("primary_position", NA, NA),too_few="align_start")
+ggplot(playerdata_clean, aes(x = primary_position, y = ValueEUR)) +
+  geom_boxplot(fill = "lightgreen") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Market Value by Position", x = "Position", y = "Market Value (€)") +
+  theme(axis.text.x = element_text(angle = 90, size = 8, hjust = 1))
+
+```
+
+```{r}
+ggplot(player_data, aes(x = PAC, y = ValueEUR)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Pace vs. Market Value", x = "Pace", y = "Market Value (€)")
+
+```
+
+## Run statistical tests
+
+Null hypothesis H₀: There is no significant relationship between player
+attributes (Pace, Passing, and Shooting) and their market value.
+
+Alternative hypothesis H₁: At least one of the player attributes (Pace,
+Passing, or Shooting) has a significant effect on market value.
+
+```{r}
+value_model <- lm(ValueEUR ~ PAC + SHO + PAS, data = playerdata_clean)
+
+plot(value_model)
+```
+
+Assumptions mostly met, not perfectly, but we have to account for the
+fact that the bigger the estimate/ variance = more noise, so for the
+sake of this report, it will do.
+
+```{r}
+summary(value_model)
+```
+
+```{r}
+value_model2 <- lm(ValueEUR ~ PAC + PAS, data = playerdata_clean)
+
+plot(value_model2)
+```
+
+```{r}
+summary(value_model2)
+```
+
+## Publication-quality graphs
+
+ggplot2 is your friend here! Remember to add in labels for axes (with
+units!), a good title, and pick the right graph type! Examples below for
+a few common needs using the iris dataset
+
+```{r}
+ggplot(player_data, aes(x = ValueEUR)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "white") +
+  scale_x_log10(labels = scales::dollar_format(prefix = "€")) +
+  labs(
+    title = "Distribution of Player Market Value",
+    x = "Market Value (log scale)",
+    y = "Number of Players"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# Add predicted values to the data
+player_data$Predicted_Value <- predict(value_model2)
+
+# Plot
+library(scales)  # for comma format
+ggplot(player_data, aes(x = ValueEUR, y = Predicted_Value)) +
+  geom_point(alpha = 0.5, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Predicted vs Actual Player Market Value",
+    x = "Actual Market Value (€)",
+    y = "Predicted Market Value (€)"
+  ) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(player_data, aes(x = PAS, y = ValueEUR)) +
+  geom_point(alpha = 0.4, color = "darkgreen") +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  labs(
+    title = "Effect of Passing on Market Value",
+    x = "Passing Score",
+    y = "Market Value (€)"
+  ) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(player_data, aes(x = PAC, y = ValueEUR, color = PAS)) +
+  geom_point(alpha = 0.6) +
+  scale_color_gradient(low = "lightblue", high = "darkblue") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Player Market Value by Pace and Passing",
+    subtitle = "FIFA 21 data — color indicates passing ability",
+    x = "Pace Rating",
+    y = "Market Value (€)",
+    color = "Passing"
+  ) +
+  theme_minimal()
+
+```
+
+## Brief discussion
+
+This analysis explored how a soccer player's individual
+attributes—specifically pace and passing—influence their market value.
+The dataset is quite large, containing over 18,000 players and many
+variables. Therefore, for the sake of my project I focused on just a few
+key attributes to keep the scope manageable and to demonstrate my
+ability to apply regression techniques. Using data from the FIFA 21
+player dataset and a multiple linear regression model, I found that both
+pace and passing were statistically significant predictors of a player's
+value, while shooting was not and was removed from the final model.
+
+The final model showed that higher scores in pace and passing are
+strongly associated with higher estimated transfer values. This makes
+intuitive sense, as these skills are critical across many field
+positions and are likely to influence both real-world performance and
+perceived potential in the FIFA dataset. This was also made very clear
+visually through the graphs used for exploratory data analysis and my
+final graphs.
+
+While the model does a good job of identifying general trends, there are
+of course limitations. For example, it doesn’t account for factors like
+age, club popularity, or player reputation—non-skill traits that can
+greatly influence market value in real-world scenarios. Future analyses
+could incorporate these variables for a more robust model.
+
+Overall, this project demonstrates how statistical analysis can reveal
+the measurable impact of specific skills on player valuation in
+professional soccer, and highlights the usefulness of regression
+techniques in sports analytics.
+
+## Notes on rendering
+
+When you use the **render** menu button, Rstudio only produces the first
+format (here, the html). To get everything, you can go to the the
+terminal tab (next to the console tab in bottom left window) and type
+
+```         
+quarto render report_template.qmd
+```
+
+that will produce all listed formats (here, html, docx, and pdf).
